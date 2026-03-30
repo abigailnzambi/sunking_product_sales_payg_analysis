@@ -1,0 +1,245 @@
+---
+title: "Sun King Insights Data Task"
+author: "Abigail Nzambi"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    code_folding: show
+---
+
+
+```{r setup, include=FALSE}
+## Setup & Configuration
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+
+required_pkgs <- c("readxl","tidyverse", "scales", "knitr", "kableExtra", "lubridate")
+
+missing_pkgs <- required_pkgs[!required_pkgs %in% installed.packages()[,1]]
+if(length(missing_pkgs) > 0) install.packages(missing_pkgs)
+
+purrr::walk(required_pkgs, library, character.only = TRUE)
+rm(required_pkgs, missing_pkgs)
+
+options(scipen = 999)
+options(knitr.table.format = "html")
+```
+
+
+```{r}
+## Graph themes
+graph_theme <- theme(
+  legend.position    = "bottom",
+  legend.title       = element_blank(),
+  axis.line.y        = element_blank(),
+  axis.line.x        = element_line(colour = "black", size = 0.5),
+  legend.text        = element_text(family = "sans", size = rel(0.8)),
+  plot.caption       = element_text(family = "sans", size = rel(1.0), vjust = -0.5),
+  plot.title         = element_text(family = "sans", size = rel(1.4), hjust = 0.5, face = "bold"),
+  plot.subtitle      = element_text(family = "sans", size = rel(1.1), hjust = 0.5),
+  axis.text          = element_text(family = "sans", size = rel(1.0)),
+  axis.title         = element_text(family = "sans", size = rel(1.0)),
+  strip.text.x       = element_text(family = "sans", size = rel(1.2)),
+  panel.background   = element_rect(fill = NA),
+  strip.background   = element_rect(fill = NA, colour = "black"))
+
+palette <- c("#E1C82A", "#4AB2C6")
+
+blues <- c("#08306B", "#08519C", "#2171B5", "#4292C6", "#6BAED6", "#9ECAE1", "#C6DBEF")
+
+```
+
+
+```{r}
+## Data Loading
+accounts  <- read.csv("C://Users//User//OneDrive//Desktop//Sunking//accounts.csv") 
+portfolio <- read.csv("C://Users//User//OneDrive//Desktop//Sunking//portfolio.csv")
+```
+
+
+```{r}
+## Data Cleaning
+accounts <- accounts %>%
+  mutate(registration_date = mdy(registration_date))
+
+portfolio <- portfolio %>%
+  mutate(portfolio_date = mdy(portfolio_date))
+```
+
+# Part 1, Section A: Exploratory Data Analysis
+
+## 1. Compute the total sales for Area A and Area B over the three months.
+
+```{r}
+# Table
+total_sales <- accounts %>%
+  filter(registration_date >= as.Date("2023-12-01"),
+    registration_date <= as.Date("2024-02-28") ) %>%
+  group_by(area) %>%
+  summarise(total_units_sold = n()) %>%
+  mutate(pct = round(total_units_sold / sum(total_units_sold) * 100, 2))
+
+kable_styling(
+  kable(
+    total_sales,
+    col.names = c("Area", "Total units sold", "Percentage units sold"),
+    caption   = "Table 1: Total units sold by area within the 3 months"),
+  bootstrap_options = "striped", full_width = F)
+
+# Graph
+ggplot(total_sales, aes(x = area, y = total_units_sold, fill = area)) +
+  geom_col(width = 0.5, show.legend = FALSE) +
+  geom_text(aes(label = paste0(comma(total_units_sold), " (", pct, "%)")), 
+            vjust = -0.5, size = 3.5, family = "sans") +
+  scale_y_continuous(labels = comma, expand = expansion(mult = c(0, 0.15))) +
+  scale_fill_manual(values = palette) +
+  labs(
+    title    = "Total units sold by area within the 3 months",
+    x        = "Area",
+    y        = "Units Sold") +
+  graph_theme
+
+```
+
+Between December 2023 and February 2024, a total of 3,842 units were sold across
+both areas. Area A accounted for the majority of sales, with 2,935 units
+(76.39%), while Area B recorded 907 units (23.61%). Area A outsold Area B
+by more than three to one over the three-month period.
+
+---
+
+## 2. Determine the total sales per product group for the two areas. How do the two areas compare?
+
+```{r}
+# Table
+sales_product_area <- accounts %>%
+  filter(registration_date >= as.Date("2023-12-01"),
+    registration_date <= as.Date("2024-02-28")) %>%
+  group_by(area, product_group) %>%
+  summarise(total_units_sold = n()) %>%
+  mutate(pct = round(total_units_sold / sum(total_units_sold) * 100, 2)) %>% 
+  arrange(area, desc(total_units_sold)) %>%
+  mutate(product_group = reorder(product_group, desc(total_units_sold)))
+
+kable_styling(kable(
+    sales_product_area,
+    col.names = c("Area", "Product Group", "Total Units Sold", "Percentage Units Sold"),
+    caption   = "Table 2: Total units sold by area and product group within the 3 months"),
+  bootstrap_options = "striped", full_width = F)
+
+
+# Graph
+ggplot(sales_product_area, aes(x = reorder(product_group, total_units_sold), 
+                                y = total_units_sold, fill = product_group)) +
+  geom_col(width = 0.65, show.legend = FALSE) +
+  geom_text(aes(label = paste0(comma(total_units_sold))),
+            hjust = -0.1, size = 3, family = "sans") +
+  scale_y_continuous(labels = comma, expand = expansion(mult = c(0, 0.3))) +
+  scale_fill_manual(values = blues) +
+  coord_flip() +
+  facet_wrap(~area) +
+  labs(title = "Total units sold by product group within the 3 months",
+    x     = "Product Group",
+    y     = "Units Sold") +
+  graph_theme +
+  theme(panel.spacing = unit(2, "cm"))
+```
+
+Product 1 dominated sales across both areas, with an 85.28% share in Area A 
+and 65.49% in Area B. Area A recorded considerably higher volumes across all 
+product groups compared to Area B.
+
+---
+
+## 3. What is the most popular product in Area A? What is the proportion of the best-seller relative to all sales in the area?
+
+```{r}
+# Table
+
+area_a_sales <- accounts %>%
+  filter(area == "Area A",
+    registration_date >= as.Date("2023-12-01"),
+    registration_date <= as.Date("2024-02-28")) %>%
+  group_by(product_group) %>%
+  summarise(units_sold = n()) %>%
+  mutate(pct = round(units_sold / sum(units_sold) * 100, 2))
+
+
+# Graph
+ggplot(area_a_sales, aes(reorder(x = product_group, -units_sold), 
+                          y = units_sold, fill = product_group) )+
+  geom_col(width = 0.65, show.legend = FALSE) +
+  geom_text(aes(label = paste0(comma(units_sold), " (", pct, "%)")),
+            vjust = -0.5, size = 3, family = "sans") +
+  scale_y_continuous(labels = comma, expand = expansion(mult = c(0, 0.15))) +
+  scale_fill_manual(values = blues) +
+  labs(
+    title    = "Most popular product in Area A",
+    subtitle = "December 2023 – February 2024",
+    x        = "Product Group",
+    y        = "Units Sold"
+  ) +
+  graph_theme
+```
+
+Product 1 is the most popular product in Area A, with 2,503 units sold,
+representing 85.28% of all Area A sales, with the remaining six product groups 
+collectively accounting for only 14.72% of sales.
+
+---
+
+## 4a. How many units of Product 1 were sold on December 13, 2023, in Area A?
+
+```{r}
+product1_dec13_a <- accounts %>%
+  filter(area == "Area A",
+    product_group == "Product 1",
+    registration_date == as.Date("2023-12-13")) %>%
+  summarise(units_sold = n())
+
+```
+
+
+On December 13, 2023, 30 units of Product 1 were sold in Area A.
+
+---
+
+## 4b. How many units of Product 5 were sold in Area B in January 2024?
+
+```{r}
+product5_jan_b <- accounts %>%
+  filter(area == "Area B",
+    product_group == "Product 5",
+    registration_date >= as.Date("2024-01-01"),
+    registration_date <= as.Date("2024-01-31")) %>%
+  summarise(units_sold = n())
+
+```
+
+
+In January 2024, 15 units of Product 5 were sold in Area B.
+
+---
+
+# Part 2, Question 1
+
+## Power Calculation to Determine Sample Size
+
+The following assumptions were used to determine the required sample size:
+
+| Parameter | Value |
+|---|---|
+| Control repayment rate (p1) | 0.40 |
+| Treatment repayment rate (p2) | 0.45 |
+| Minimum detectable effect (MDE) | 0.05 percentage points |
+| Significance level (alpha) | 0.05 (two-tailed) |
+| Statistical power | 0.80 |
+| Group allocation | 50:50 |
+
+
+```{r, fig.cap="Power Calculation Result", out.width="70%", fig.align="center"}
+knitr::include_graphics("C:/Users/User/OneDrive/Desktop/Sunking/Screenshot 2026-03-28 010655.png")
+```
+
